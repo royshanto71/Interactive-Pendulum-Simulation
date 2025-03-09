@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Pendulum Simulation</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        
+        h1 {
+            color: #2c3e50;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        
+        .simulation-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+        }
+        
+        .canvas-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 15px;
+            flex: 1;
+            min-width: 400px;
+            max-width: 600px;
+        }
+        
+        .controls {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        canvas {
+            background-color: #f0f8ff;
+            border-radius: 4px;
+            display: block;
+            margin: 0 auto;
+        }
+        
+        .slider-container {
+            margin-bottom: 15px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+        
+        input[type="range"] {
+            width: 100%;
+            margin-bottom: 5px;
+        }
+        
+        .value-display {
+            font-size: 0.9em;
+            color: #555;
+            text-align: right;
+        }
+        
+        button {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-right: 10px;
+            transition: background-color 0.2s;
+        }
+        
+        button:hover {
+            background-color: #2980b9;
+        }
+        
+        button:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .button-group {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 20px;
+        }
+        
+        .info-panel {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        
+        .info-item {
+            padding: 10px;
+            background-color: #f0f8ff;
+            border-radius: 4px;
+        }
+        
+        .info-label {
+            font-weight: 600;
+            font-size: 0.9em;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+        
+        .info-value {
+            font-size: 1.1em;
+            color: #3498db;
+        }
+    </style>
+</head>
+<body>
+    <h1>Interactive Pendulum Simulation</h1>
+    
+    <div class="container">
+        <div class="simulation-container">
+            <div class="canvas-container">
+                <canvas id="pendulumCanvas" width="500" height="400"></canvas>
+            </div>
+            
+            <div class="controls">
+                <h2>Pendulum Parameters</h2>
+                
+                <div class="slider-container">
+                    <label for="length">Length (m):</label>
+                    <input type="range" id="length" min="0.1" max="2" step="0.1" value="1">
+                    <div class="value-display"><span id="lengthValue">1.0</span> m</div>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="mass">Mass (kg):</label>
+                    <input type="range" id="mass" min="0.1" max="5" step="0.1" value="1">
+                    <div class="value-display"><span id="massValue">1.0</span> kg</div>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="gravity">Gravity (m/s²):</label>
+                    <input type="range" id="gravity" min="1" max="20" step="0.1" value="9.81">
+                    <div class="value-display"><span id="gravityValue">9.81</span> m/s²</div>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="damping">Damping (0-1):</label>
+                    <input type="range" id="damping" min="0" max="0.5" step="0.01" value="0.1">
+                    <div class="value-display"><span id="dampingValue">0.1</span></div>
+                </div>
+                
+                <div class="slider-container">
+                    <label for="initialAngle">Initial Angle (degrees):</label>
+                    <input type="range" id="initialAngle" min="0" max="180" step="1" value="45">
+                    <div class="value-display"><span id="initialAngleValue">45</span>°</div>
+                </div>
+                
+                <div class="button-group">
+                    <button id="startBtn">Start</button>
+                    <button id="resetBtn">Reset</button>
+                    <button id="pauseBtn" disabled>Pause</button>
+                </div>
+            </div>
+        </div>
+        
+        <div class="info-panel">
+            <h2>Real-time Data</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <div class="info-label">Current Angle</div>
+                    <div class="info-value" id="currentAngle">0.0°</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Angular Velocity</div>
+                    <div class="info-value" id="angularVelocity">0.0 rad/s</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Kinetic Energy</div>
+                    <div class="info-value" id="kineticEnergy">0.0 J</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Potential Energy</div>
+                    <div class="info-value" id="potentialEnergy">0.0 J</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Total Energy</div>
+                    <div class="info-value" id="totalEnergy">0.0 J</div>
+                </div>
+                <div class="info-item">
+                    <div class="info-label">Period (Simple)</div>
+                    <div class="info-value" id="period">0.0 s</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // Get canvas and its context
+        const canvas = document.getElementById('pendulumCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // Get DOM elements for controls
+        const lengthSlider = document.getElementById('length');
+        const massSlider = document.getElementById('mass');
+        const gravitySlider = document.getElementById('gravity');
+        const dampingSlider = document.getElementById('damping');
+        const initialAngleSlider = document.getElementById('initialAngle');
+        
+        const lengthValue = document.getElementById('lengthValue');
+        const massValue = document.getElementById('massValue');
+        const gravityValue = document.getElementById('gravityValue');
+        const dampingValue = document.getElementById('dampingValue');
+        const initialAngleValue = document.getElementById('initialAngleValue');
+        
+        const startBtn = document.getElementById('startBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const pauseBtn = document.getElementById('pauseBtn');
+        
+        // Get DOM elements for data display
+        const currentAngleDisplay = document.getElementById('currentAngle');
+        const angularVelocityDisplay = document.getElementById('angularVelocity');
+        const kineticEnergyDisplay = document.getElementById('kineticEnergy');
+        const potentialEnergyDisplay = document.getElementById('potentialEnergy');
+        const totalEnergyDisplay = document.getElementById('totalEnergy');
+        const periodDisplay = document.getElementById('period');
+        
+        // Configuration and state variables
+        const FPS = 60;
+        const SCALE = 100; // pixels per meter
+        
+        let pendulum = {
+            x0: canvas.width / 2,  // Pivot point x
+            y0: canvas.height / 3, // Pivot point y
+            length: parseFloat(lengthSlider.value),
+            mass: parseFloat(massSlider.value),
+            gravity: parseFloat(gravitySlider.value),
+            damping: parseFloat(dampingSlider.value),
+            angle: parseFloat(initialAngleSlider.value) * Math.PI / 180,
+            angularVelocity: 0,
+            angularAcceleration: 0
+        };
+        
+        let animationId = null;
+        let lastTimestamp = 0;
+        
+        // Update UI values when sliders change
+        lengthSlider.addEventListener('input', () => {
+            const value = parseFloat(lengthSlider.value);
+            lengthValue.textContent = value.toFixed(1);
+            pendulum.length = value;
+            updatePeriod();
+            if (!animationId) {
+                drawPendulum(); // Update display when not animating
+            }
+        });
+        
+        massSlider.addEventListener('input', () => {
+            const value = parseFloat(massSlider.value);
+            massValue.textContent = value.toFixed(1);
+            pendulum.mass = value;
+            updatePeriod();
+        });
+        
+        gravitySlider.addEventListener('input', () => {
+            const value = parseFloat(gravitySlider.value);
+            gravityValue.textContent = value.toFixed(2);
+            pendulum.gravity = value;
+            updatePeriod();
+        });
+        
+        dampingSlider.addEventListener('input', () => {
+            const value = parseFloat(dampingSlider.value);
+            dampingValue.textContent = value.toFixed(2);
+            pendulum.damping = value;
+        });
+        
+        initialAngleSlider.addEventListener('input', () => {
+            const value = parseFloat(initialAngleSlider.value);
+            initialAngleValue.textContent = value.toFixed(0);
+            pendulum.angle = value * Math.PI / 180;
+            if (!animationId) {
+                drawPendulum(); // Update display when not animating
+                updateEnergyDisplay();
+            }
+        });
+        
+        // Button event handlers
+        startBtn.addEventListener('click', startSimulation);
+        resetBtn.addEventListener('click', resetSimulation);
+        pauseBtn.addEventListener('click', pauseSimulation);
+        
+        // Calculate pendulum position based on angle and length
+        function calculatePosition() {
+            const x = pendulum.x0 + Math.sin(pendulum.angle) * pendulum.length * SCALE;
+            const y = pendulum.y0 + Math.cos(pendulum.angle) * pendulum.length * SCALE;
+            return { x, y };
+        }
+        
+        // Physics calculations
+        function updatePhysics(deltaTime) {
+            // Calculate angular acceleration
+            // The equation of motion for a pendulum: d²θ/dt² = -(g/L)sin(θ) - (b/m)dθ/dt
+            const gravityTerm = -pendulum.gravity / pendulum.length * Math.sin(pendulum.angle);
+            const dampingTerm = -pendulum.damping * pendulum.angularVelocity;
+            pendulum.angularAcceleration = gravityTerm + dampingTerm;
+            
+            // Update angular velocity (Euler integration)
+            pendulum.angularVelocity += pendulum.angularAcceleration * deltaTime;
+            
+            // Update angle
+            pendulum.angle += pendulum.angularVelocity * deltaTime;
+        }
+        
+        // Calculate and update energy values
+        function updateEnergyDisplay() {
+            // Calculate position for potential energy reference
+            const pos = calculatePosition();
+            
+            // Kinetic energy: K = (1/2)mv²
+            // For pendulum, v = L * ω (angular velocity)
+            const velocity = pendulum.length * Math.abs(pendulum.angularVelocity);
+            const kineticEnergy = 0.5 * pendulum.mass * Math.pow(velocity, 2);
+            
+            // Potential energy: U = mgh
+            // h is the height relative to the lowest point
+            const height = pendulum.length * (1 - Math.cos(pendulum.angle));
+            const potentialEnergy = pendulum.mass * pendulum.gravity * height;
+            
+            // Total energy
+            const totalEnergy = kineticEnergy + potentialEnergy;
+            
+            // Update displays
+            kineticEnergyDisplay.textContent = kineticEnergy.toFixed(2) + " J";
+            potentialEnergyDisplay.textContent = potentialEnergy.toFixed(2) + " J";
+            totalEnergyDisplay.textContent = totalEnergy.toFixed(2) + " J";
+            
+            // Update other real-time data
+            currentAngleDisplay.textContent = (pendulum.angle * 180 / Math.PI).toFixed(1) + "°";
+            angularVelocityDisplay.textContent = pendulum.angularVelocity.toFixed(2) + " rad/s";
+        }
+        
+        // Calculate and display the simple pendulum period
+        function updatePeriod() {
+            // Simple pendulum period formula: T = 2π√(L/g)
+            // This is an approximation valid for small angles
+            const period = 2 * Math.PI * Math.sqrt(pendulum.length / pendulum.gravity);
+            periodDisplay.textContent = period.toFixed(2) + " s";
+        }
+        
+        // Draw the pendulum on the canvas
+        function drawPendulum() {
+            // Clear the canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Get pendulum bob position
+            const pos = calculatePosition();
+            
+            // Draw the pendulum rod
+            ctx.beginPath();
+            ctx.moveTo(pendulum.x0, pendulum.y0);
+            ctx.lineTo(pos.x, pos.y);
+            ctx.strokeStyle = "#333";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            
+            // Draw pivot point
+            ctx.beginPath();
+            ctx.arc(pendulum.x0, pendulum.y0, 5, 0, Math.PI * 2);
+            ctx.fillStyle = "#555";
+            ctx.fill();
+            
+            // Draw the pendulum bob (scaled by mass)
+            const bobRadius = 10 + pendulum.mass * 5;
+            ctx.beginPath();
+            ctx.arc(pos.x, pos.y, bobRadius, 0, Math.PI * 2);
+            
+            // Create gradient for bob
+            const gradient = ctx.createRadialGradient(
+                pos.x - bobRadius/3, pos.y - bobRadius/3, 0,
+                pos.x, pos.y, bobRadius
+            );
+            gradient.addColorStop(0, "#3498db");
+            gradient.addColorStop(1, "#2980b9");
+            
+            ctx.fillStyle = gradient;
+            ctx.fill();
+            ctx.strokeStyle = "#1a5276";
+            ctx.lineWidth = 1;
+            ctx.stroke();
+            
+            // Draw the trace path (to be implemented later)
+        }
+        
+        // Animation loop
+        function animate(timestamp) {
+            if (!lastTimestamp) {
+                lastTimestamp = timestamp;
+            }
+            
+            // Calculate time delta (in seconds)
+            const deltaTime = (timestamp - lastTimestamp) / 1000;
+            lastTimestamp = timestamp;
+            
+            // Update physics (limit delta to avoid instability)
+            const maxDelta = 1 / 30; // Maximum 1/30 second step
+            const steps = Math.ceil(deltaTime / maxDelta);
+            
+            for (let i = 0; i < steps; i++) {
+                updatePhysics(deltaTime / steps);
+            }
+            
+            // Update energy display
+            updateEnergyDisplay();
+            
+            // Draw pendulum
+            drawPendulum();
+            
+            // Request next frame
+            animationId = requestAnimationFrame(animate);
+        }
+        
+        function startSimulation() {
+            if (!animationId) {
+                // Reset timestamp to avoid large jumps
+                lastTimestamp = 0;
+                
+                // Start animation
+                animationId = requestAnimationFrame(animate);
+                
+                // Update button states
+                startBtn.disabled = true;
+                pauseBtn.disabled = false;
+                
+                // Disable angle slider during simulation
+                initialAngleSlider.disabled = true;
+            }
+        }
+        
+        function pauseSimulation() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+                
+                // Update button states
+                startBtn.disabled = false;
+                pauseBtn.disabled = true;
+            }
+        }
+        
+        function resetSimulation() {
+            // Stop animation if running
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            
+            // Reset pendulum state
+            pendulum.angle = parseFloat(initialAngleSlider.value) * Math.PI / 180;
+            pendulum.angularVelocity = 0;
+            pendulum.angularAcceleration = 0;
+            
+            // Update displays
+            drawPendulum();
+            updateEnergyDisplay();
+            
+            // Update button states
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            
+            // Re-enable angle slider
+            initialAngleSlider.disabled = false;
+        }
+        
+        // Initialize
+        function init() {
+            // Initialize pendulum display
+            drawPendulum();
+            updateEnergyDisplay();
+            updatePeriod();
+            
+            // Add resize event handler
+            window.addEventListener('resize', () => {
+                // Redraw pendulum if not animating
+                if (!animationId) {
+                    drawPendulum();
+                }
+            });
+        }
+        
+        // Start initialization when page loads
+        init();
+    </script>
+</body>
+</html>
