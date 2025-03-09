@@ -303,436 +303,501 @@
     
     <script>
         // Get canvas and its context
-        const canvas = document.getElementById('pendulumCanvas');
-        const ctx = canvas.getContext('2d');
+const canvas = document.getElementById('pendulumCanvas');
+const ctx = canvas.getContext('2d');
+
+// Get graph canvas and its context
+const graphCanvas = document.getElementById('graphCanvas');
+const graphCtx = graphCanvas.getContext('2d');
+
+// Get DOM elements for controls
+const lengthSlider = document.getElementById('length');
+const massSlider = document.getElementById('mass');
+const gravitySlider = document.getElementById('gravity');
+const dampingSlider = document.getElementById('damping');
+const initialAngleSlider = document.getElementById('initialAngle');
+
+const lengthValue = document.getElementById('lengthValue');
+const massValue = document.getElementById('massValue');
+const gravityValue = document.getElementById('gravityValue');
+const dampingValue = document.getElementById('dampingValue');
+const initialAngleValue = document.getElementById('initialAngleValue');
+
+const startBtn = document.getElementById('startBtn');
+const resetBtn = document.getElementById('resetBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const clearGraphBtn = document.getElementById('clearGraphBtn');
+const timeWindowSelect = document.getElementById('timeWindow');
+
+// Get DOM elements for data display
+const currentAngleDisplay = document.getElementById('currentAngle');
+const angularVelocityDisplay = document.getElementById('angularVelocity');
+const kineticEnergyDisplay = document.getElementById('kineticEnergy');
+const potentialEnergyDisplay = document.getElementById('potentialEnergy');
+const totalEnergyDisplay = document.getElementById('totalEnergy');
+const periodDisplay = document.getElementById('period');
+
+// Configuration and state variables
+const FPS = 60;
+const SCALE = 100; // pixels per meter
+
+let pendulum = {
+    x0: canvas.width / 2,  // Pivot point x
+    y0: canvas.height / 3, // Pivot point y
+    length: parseFloat(lengthSlider.value),
+    mass: parseFloat(massSlider.value),
+    gravity: parseFloat(gravitySlider.value),
+    damping: parseFloat(dampingSlider.value),
+    angle: parseFloat(initialAngleSlider.value) * Math.PI / 180,
+    angularVelocity: 0,
+    angularAcceleration: 0
+};
+
+let animationId = null;
+let lastTimestamp = 0;
+let elapsedTime = 0;
+
+// Graph data
+let graphData = {
+    timeData: [],
+    angleData: [],
+    velocityData: [],
+    kineticEnergyData: [],
+    potentialEnergyData: []
+};
+
+let timeWindow = parseInt(timeWindowSelect.value); // seconds
+
+// Update UI values when sliders change
+lengthSlider.addEventListener('input', () => {
+    const value = parseFloat(lengthSlider.value);
+    lengthValue.textContent = value.toFixed(1);
+    pendulum.length = value;
+    updatePeriod();
+    if (!animationId) {
+        drawPendulum(); // Update display when not animating
+    }
+});
+
+massSlider.addEventListener('input', () => {
+    const value = parseFloat(massSlider.value);
+    massValue.textContent = value.toFixed(1);
+    pendulum.mass = value;
+    updatePeriod();
+});
+
+gravitySlider.addEventListener('input', () => {
+    const value = parseFloat(gravitySlider.value);
+    gravityValue.textContent = value.toFixed(2);
+    pendulum.gravity = value;
+    updatePeriod();
+});
+
+dampingSlider.addEventListener('input', () => {
+    const value = parseFloat(dampingSlider.value);
+    dampingValue.textContent = value.toFixed(2);
+    pendulum.damping = value;
+});
+
+initialAngleSlider.addEventListener('input', () => {
+    const value = parseFloat(initialAngleSlider.value);
+    initialAngleValue.textContent = value.toFixed(0);
+    pendulum.angle = value * Math.PI / 180;
+    if (!animationId) {
+        drawPendulum(); // Update display when not animating
+        updateEnergyDisplay();
+    }
+});
+
+// Time window change handler
+timeWindowSelect.addEventListener('change', () => {
+    timeWindow = parseInt(timeWindowSelect.value);
+    drawGraph(); // Redraw with new time window
+});
+
+// Button event handlers
+startBtn.addEventListener('click', startSimulation);
+resetBtn.addEventListener('click', resetSimulation);
+pauseBtn.addEventListener('click', pauseSimulation);
+clearGraphBtn.addEventListener('click', clearGraph);
+
+// Calculate pendulum position based on angle and length
+function calculatePosition() {
+    const x = pendulum.x0 + Math.sin(pendulum.angle) * pendulum.length * SCALE;
+    const y = pendulum.y0 + Math.cos(pendulum.angle) * pendulum.length * SCALE;
+    return { x, y };
+}
+
+// Physics calculations
+function updatePhysics(deltaTime) {
+    // Calculate angular acceleration
+    // The equation of motion for a pendulum: d²θ/dt² = -(g/L)sin(θ) - (b/m)dθ/dt
+    const gravityTerm = -pendulum.gravity / pendulum.length * Math.sin(pendulum.angle);
+    const dampingTerm = -pendulum.damping * pendulum.angularVelocity;
+    pendulum.angularAcceleration = gravityTerm + dampingTerm;
+    
+    // Update angular velocity (Euler integration)
+    pendulum.angularVelocity += pendulum.angularAcceleration * deltaTime;
+    
+    // Update angle
+    pendulum.angle += pendulum.angularVelocity * deltaTime;
+}
+
+// Calculate and update energy values
+function updateEnergyDisplay() {
+    // Calculate position for potential energy reference
+    const pos = calculatePosition();
+    
+    // Kinetic energy: K = (1/2)mv²
+    // For pendulum, v = L * ω (angular velocity)
+    const velocity = pendulum.length * Math.abs(pendulum.angularVelocity);
+    const kineticEnergy = 0.5 * pendulum.mass * Math.pow(velocity, 2);
+    
+    // Potential energy: U = mgh
+    // h is the height relative to the lowest point
+    const height = pendulum.length * (1 - Math.cos(pendulum.angle));
+    const potentialEnergy = pendulum.mass * pendulum.gravity * height;
+    
+    // Total energy
+    const totalEnergy = kineticEnergy + potentialEnergy;
+    
+    // Update displays
+    kineticEnergyDisplay.textContent = kineticEnergy.toFixed(2) + " J";
+    potentialEnergyDisplay.textContent = potentialEnergy.toFixed(2) + " J";
+    totalEnergyDisplay.textContent = totalEnergy.toFixed(2) + " J";
+    
+    // Update other real-time data
+    currentAngleDisplay.textContent = (pendulum.angle * 180 / Math.PI).toFixed(1) + "°";
+    angularVelocityDisplay.textContent = pendulum.angularVelocity.toFixed(2) + " rad/s";
+    
+    return { kineticEnergy, potentialEnergy };
+}
+
+// Calculate and display the simple pendulum period
+function updatePeriod() {
+    // Simple pendulum period formula: T = 2π√(L/g)
+    // This is an approximation valid for small angles
+    const period = 2 * Math.PI * Math.sqrt(pendulum.length / pendulum.gravity);
+    periodDisplay.textContent = period.toFixed(2) + " s";
+}
+
+// Draw the pendulum on the canvas
+function drawPendulum() {
+    // Clear the canvas
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Get pendulum bob position
+    const pos = calculatePosition();
+    
+    // Draw the pendulum rod
+    ctx.beginPath();
+    ctx.moveTo(pendulum.x0, pendulum.y0);
+    ctx.lineTo(pos.x, pos.y);
+    ctx.strokeStyle = "#333";
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    
+    // Draw pivot point
+    ctx.beginPath();
+    ctx.arc(pendulum.x0, pendulum.y0, 5, 0, Math.PI * 2);
+    ctx.fillStyle = "#555";
+    ctx.fill();
+    
+    // Draw the pendulum bob (scaled by mass)
+    const bobRadius = 10 + pendulum.mass * 5;
+    ctx.beginPath();
+    ctx.arc(pos.x, pos.y, bobRadius, 0, Math.PI * 2);
+    
+    // Create gradient for bob
+    const gradient = ctx.createRadialGradient(
+        pos.x - bobRadius/3, pos.y - bobRadius/3, 0,
+        pos.x, pos.y, bobRadius
+    );
+    gradient.addColorStop(0, "#3498db");
+    gradient.addColorStop(1, "#2980b9");
+    
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.strokeStyle = "#1a5276";
+    ctx.lineWidth = 1;
+    ctx.stroke();
+}
+
+// Update graph data
+function updateGraphData(time, angle, velocity, kineticEnergy, potentialEnergy) {
+    graphData.timeData.push(time);
+    graphData.angleData.push(angle);
+    graphData.velocityData.push(velocity);
+    graphData.kineticEnergyData.push(kineticEnergy);
+    graphData.potentialEnergyData.push(potentialEnergy);
+    
+    // Remove old data points beyond the time window
+    while (graphData.timeData.length > 0 && graphData.timeData[0] < time - timeWindow) {
+        graphData.timeData.shift();
+        graphData.angleData.shift();
+        graphData.velocityData.shift();
+        graphData.kineticEnergyData.shift();
+        graphData.potentialEnergyData.shift();
+    }
+}
+
+// Draw the graph
+function drawGraph() {
+    // Clear the canvas
+    graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+    
+    if (graphData.timeData.length === 0) return;
+    
+    const width = graphCanvas.width;
+    const height = graphCanvas.height;
+    const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+    
+    const graphWidth = width - padding.left - padding.right;
+    const graphHeight = height - padding.top - padding.bottom;
+    
+    // Draw grid
+    graphCtx.strokeStyle = "#e0e0e0";
+    graphCtx.lineWidth = 1;
+    
+    // Vertical grid lines (time)
+    const timeStart = Math.max(0, graphData.timeData[graphData.timeData.length - 1] - timeWindow);
+    const timeEnd = Math.max(timeWindow, graphData.timeData[graphData.timeData.length - 1]);
+    const timeStep = timeWindow / 5;
+    
+    for (let t = Math.ceil(timeStart / timeStep) * timeStep; t <= timeEnd; t += timeStep) {
+        const x = padding.left + ((t - timeStart) / timeWindow) * graphWidth;
         
-        // Get graph canvas and its context
-        const graphCanvas = document.getElementById('graphCanvas');
-        const graphCtx = graphCanvas.getContext('2d');
+        graphCtx.beginPath();
+        graphCtx.moveTo(x, padding.top);
+        graphCtx.lineTo(x, height - padding.bottom);
+        graphCtx.stroke();
         
-        // Get DOM elements for controls
-        const lengthSlider = document.getElementById('length');
-        const massSlider = document.getElementById('mass');
-        const gravitySlider = document.getElementById('gravity');
-        const dampingSlider = document.getElementById('damping');
-        const initialAngleSlider = document.getElementById('initialAngle');
+        // Time labels
+        graphCtx.fillStyle = "#666";
+        graphCtx.font = "10px Arial";
+        graphCtx.textAlign = "center";
+        graphCtx.fillText(t.toFixed(1) + "s", x, height - padding.bottom + 15);
+    }
+    
+    // Horizontal grid lines
+    const valueStep = 1;
+    for (let v = -3; v <= 3; v += valueStep) {
+        const y = padding.top + graphHeight / 2 - (v / 3) * (graphHeight / 2);
         
-        const lengthValue = document.getElementById('lengthValue');
-        const massValue = document.getElementById('massValue');
-        const gravityValue = document.getElementById('gravityValue');
-        const dampingValue = document.getElementById('dampingValue');
-        const initialAngleValue = document.getElementById('initialAngleValue');
+        graphCtx.beginPath();
+        graphCtx.moveTo(padding.left, y);
+        graphCtx.lineTo(width - padding.right, y);
+        graphCtx.stroke();
         
-        const startBtn = document.getElementById('startBtn');
-        const resetBtn = document.getElementById('resetBtn');
-        const pauseBtn = document.getElementById('pauseBtn');
-        const clearGraphBtn = document.getElementById('clearGraphBtn');
-        const timeWindowSelect = document.getElementById('timeWindow');
-        
-        // Get DOM elements for data display
-        const currentAngleDisplay = document.getElementById('currentAngle');
-        const angularVelocityDisplay = document.getElementById('angularVelocity');
-        const kineticEnergyDisplay = document.getElementById('kineticEnergy');
-        const potentialEnergyDisplay = document.getElementById('potentialEnergy');
-        const totalEnergyDisplay = document.getElementById('totalEnergy');
-        const periodDisplay = document.getElementById('period');
-        
-        // Configuration and state variables
-        const FPS = 60;
-        const SCALE = 100; // pixels per meter
-        
-        let pendulum = {
-            x0: canvas.width / 2,  // Pivot point x
-            y0: canvas.height / 3, // Pivot point y
-            length: parseFloat(lengthSlider.value),
-            mass: parseFloat(massSlider.value),
-            gravity: parseFloat(gravitySlider.value),
-            damping: parseFloat(dampingSlider.value),
-            angle: parseFloat(initialAngleSlider.value) * Math.PI / 180,
-            angularVelocity: 0,
-            angularAcceleration: 0
-        };
-        
-        let animationId = null;
-        let lastTimestamp = 0;
-        let elapsedTime = 0;
-        
-        // Graph data
-        let graphData = {
-            timeData: [],
-            angleData: [],
-            velocityData: [],
-            kineticEnergyData: [],
-            potentialEnergyData: []
-        };
-        
-        let timeWindow = parseInt(timeWindowSelect.value); // seconds
-        
-        // Update UI values when sliders change
-        lengthSlider.addEventListener('input', () => {
-            const value = parseFloat(lengthSlider.value);
-            lengthValue.textContent = value.toFixed(1);
-            pendulum.length = value;
-            updatePeriod();
-            if (!animationId) {
-                drawPendulum(); // Update display when not animating
-            }
-        });
-        
-        massSlider.addEventListener('input', () => {
-            const value = parseFloat(massSlider.value);
-            massValue.textContent = value.toFixed(1);
-            pendulum.mass = value;
-            updatePeriod();
-        });
-        
-        gravitySlider.addEventListener('input', () => {
-            const value = parseFloat(gravitySlider.value);
-            gravityValue.textContent = value.toFixed(2);
-            pendulum.gravity = value;
-            updatePeriod();
-        });
-        
-        dampingSlider.addEventListener('input', () => {
-            const value = parseFloat(dampingSlider.value);
-            dampingValue.textContent = value.toFixed(2);
-            pendulum.damping = value;
-        });
-        
-        initialAngleSlider.addEventListener('input', () => {
-            const value = parseFloat(initialAngleSlider.value);
-            initialAngleValue.textContent = value.toFixed(0);
-            pendulum.angle = value * Math.PI / 180;
-            if (!animationId) {
-                drawPendulum(); // Update display when not animating
-                updateEnergyDisplay();
-            }
-        });
-        
-        // Time window change handler
-        timeWindowSelect.addEventListener('change', () => {
-            timeWindow = parseInt(timeWindowSelect.value);
-            drawGraph(); // Redraw with new time window
-        });
-        
-        // Button event handlers
-        startBtn.addEventListener('click', startSimulation);
-        resetBtn.addEventListener('click', resetSimulation);
-        pauseBtn.addEventListener('click', pauseSimulation);
-        clearGraphBtn.addEventListener('click', clearGraph);
-        
-        // Calculate pendulum position based on angle and length
-        function calculatePosition() {
-            const x = pendulum.x0 + Math.sin(pendulum.angle) * pendulum.length * SCALE;
-            const y = pendulum.y0 + Math.cos(pendulum.angle) * pendulum.length * SCALE;
-            return { x, y };
+        // Value labels
+        graphCtx.fillStyle = "#666";
+        graphCtx.font = "10px Arial";
+        graphCtx.textAlign = "right";
+        graphCtx.fillText(v.toFixed(1), padding.left - 5, y + 3);
+    }
+    
+    // Y-axis
+    graphCtx.strokeStyle = "#666";
+    graphCtx.lineWidth = 2;
+    graphCtx.beginPath();
+    graphCtx.moveTo(padding.left, padding.top);
+    graphCtx.lineTo(padding.left, height - padding.bottom);
+    graphCtx.stroke();
+    
+    // X-axis (zero line)
+    graphCtx.beginPath();
+    graphCtx.moveTo(padding.left, padding.top + graphHeight / 2);
+    graphCtx.lineTo(width - padding.right, padding.top + graphHeight / 2);
+    graphCtx.stroke();
+    
+    // Function to map data point to canvas coordinates
+    function mapToCanvas(time, value, yScale = 1) {
+        const x = padding.left + ((time - timeStart) / timeWindow) * graphWidth;
+        // Center y at graphHeight/2, scale by yScale, and invert (canvas y increases downward)
+        const y = padding.top + graphHeight / 2 - (value * yScale) * (graphHeight / 2);
+        return { x, y };
+    }
+    
+    // Draw angle curve
+    graphCtx.strokeStyle = "#e74c3c"; // Red
+    graphCtx.lineWidth = 2;
+    graphCtx.beginPath();
+    
+    for (let i = 0; i < graphData.timeData.length; i++) {
+        const point = mapToCanvas(graphData.timeData[i], graphData.angleData[i]);
+        if (i === 0) {
+            graphCtx.moveTo(point.x, point.y);
+        } else {
+            graphCtx.lineTo(point.x, point.y);
         }
-        
-        // Physics calculations
-        function updatePhysics(deltaTime) {
-            // Calculate angular acceleration
-            // The equation of motion for a pendulum: d²θ/dt² = -(g/L)sin(θ) - (b/m)dθ/dt
-            const gravityTerm = -pendulum.gravity / pendulum.length * Math.sin(pendulum.angle);
-            const dampingTerm = -pendulum.damping * pendulum.angularVelocity;
-            pendulum.angularAcceleration = gravityTerm + dampingTerm;
-            
-            // Update angular velocity (Euler integration)
-            pendulum.angularVelocity += pendulum.angularAcceleration * deltaTime;
-            
-            // Update angle
-            pendulum.angle += pendulum.angularVelocity * deltaTime;
+    }
+    graphCtx.stroke();
+    
+    // Draw velocity curve
+    graphCtx.strokeStyle = "#3498db"; // Blue
+    graphCtx.beginPath();
+    
+    for (let i = 0; i < graphData.timeData.length; i++) {
+        const point = mapToCanvas(graphData.timeData[i], graphData.velocityData[i]);
+        if (i === 0) {
+            graphCtx.moveTo(point.x, point.y);
+        } else {
+            graphCtx.lineTo(point.x, point.y);
         }
-        
-        // Calculate and update energy values
-        function updateEnergyDisplay() {
-            // Calculate position for potential energy reference
-            const pos = calculatePosition();
-            
-            // Kinetic energy: K = (1/2)mv²
-            // For pendulum, v = L * ω (angular velocity)
-            const velocity = pendulum.length * Math.abs(pendulum.angularVelocity);
-            const kineticEnergy = 0.5 * pendulum.mass * Math.pow(velocity, 2);
-            
-            // Potential energy: U = mgh
-            // h is the height relative to the lowest point
-            const height = pendulum.length * (1 - Math.cos(pendulum.angle));
-            const potentialEnergy = pendulum.mass * pendulum.gravity * height;
-            
-            // Total energy
-            const totalEnergy = kineticEnergy + potentialEnergy;
-            
-            // Update displays
-            kineticEnergyDisplay.textContent = kineticEnergy.toFixed(2) + " J";
-            potentialEnergyDisplay.textContent = potentialEnergy.toFixed(2) + " J";
-            totalEnergyDisplay.textContent = totalEnergy.toFixed(2) + " J";
-            
-            // Update other real-time data
-            currentAngleDisplay.textContent = (pendulum.angle * 180 / Math.PI).toFixed(1) + "°";
-            angularVelocityDisplay.textContent = pendulum.angularVelocity.toFixed(2) + " rad/s";
-            
-            return { kineticEnergy, potentialEnergy };
+    }
+    graphCtx.stroke();
+    
+    // Draw kinetic energy curve (scaled)
+    graphCtx.strokeStyle = "#2ecc71"; // Green
+    graphCtx.beginPath();
+    
+    for (let i = 0; i < graphData.timeData.length; i++) {
+        // Scale energy values to fit on the same graph
+        const energyScale = 0.5; // Adjust based on typical energy values
+        const point = mapToCanvas(graphData.timeData[i], graphData.kineticEnergyData[i] * energyScale);
+        if (i === 0) {
+            graphCtx.moveTo(point.x, point.y);
+        } else {
+            graphCtx.lineTo(point.x, point.y);
         }
-        
-        // Calculate and display the simple pendulum period
-        function updatePeriod() {
-            // Simple pendulum period formula: T = 2π√(L/g)
-            // This is an approximation valid for small angles
-            const period = 2 * Math.PI * Math.sqrt(pendulum.length / pendulum.gravity);
-            periodDisplay.textContent = period.toFixed(2) + " s";
+    }
+    graphCtx.stroke();
+    
+    // Draw potential energy curve (scaled)
+    graphCtx.strokeStyle = "#f39c12"; // Orange
+    graphCtx.beginPath();
+    
+    for (let i = 0; i < graphData.timeData.length; i++) {
+        // Scale energy values to fit on the same graph
+        const energyScale = 0.5; // Adjust based on typical energy values
+        const point = mapToCanvas(graphData.timeData[i], graphData.potentialEnergyData[i] * energyScale);
+        if (i === 0) {
+            graphCtx.moveTo(point.x, point.y);
+        } else {
+            graphCtx.lineTo(point.x, point.y);
         }
+    }
+    graphCtx.stroke();
+    
+    // Graph title
+    graphCtx.fillStyle = "#333";
+    graphCtx.font = "12px Arial";
+    graphCtx.textAlign = "center";
+    graphCtx.fillText("Pendulum Motion Over Time", width / 2, padding.top - 5);
+}
+
+// Clear graph data
+function clearGraph() {
+    graphData = {
+        timeData: [],
+        angleData: [],
+        velocityData: [],
+        kineticEnergyData: [],
+        potentialEnergyData: []
+    };
+    drawGraph();
+}
+
+// Animation loop
+function animate(timestamp) {
+    if (!lastTimestamp) {
+        lastTimestamp = timestamp;
+    }
+    
+    // Calculate time delta (in seconds)
+    const deltaTime = (timestamp - lastTimestamp) / 1000;
+    lastTimestamp = timestamp;
+    
+    // Update elapsed time
+    elapsedTime += deltaTime;
+    
+    // Update physics (limit delta to avoid instability)
+    const maxDelta = 1 / 30; // Maximum 1/30 second step
+    const steps = Math.ceil(deltaTime / maxDelta);
+    
+    for (let i = 0; i < steps; i++) {
+        updatePhysics(deltaTime / steps);
+    }
+    
+    // Update energy display and get energy values
+    const energyValues = updateEnergyDisplay();
+    
+    // Update graph data (10 samples per second is enough)
+    if (graphData.timeData.length === 0 || 
+        elapsedTime - graphData.timeData[graphData.timeData.length - 1] >= 0.1) {
+        updateGraphData(
+            elapsedTime, 
+            pendulum.angle, 
+            pendulum.angularVelocity,
+            energyValues.kineticEnergy,
+            energyValues.potentialEnergy
+        );
+    }
+    
+    // Draw the pendulum and graph
+    drawPendulum();
+    drawGraph();
+    
+    // Continue animation
+    animationId = requestAnimationFrame(animate);
+}
+
+// Start simulation function
+function startSimulation() {
+    if (!animationId) {
+        // Reset timestamp on start
+        lastTimestamp = 0;
         
-        // Draw the pendulum on the canvas
-        function drawPendulum() {
-            // Clear the canvas
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            
-            // Get pendulum bob position
-            const pos = calculatePosition();
-            
-            // Draw the pendulum rod
-            ctx.beginPath();
-            ctx.moveTo(pendulum.x0, pendulum.y0);
-            ctx.lineTo(pos.x, pos.y);
-            ctx.strokeStyle = "#333";
-            ctx.lineWidth = 2;
-            ctx.stroke();
-            
-            // Draw pivot point
-            ctx.beginPath();
-            ctx.arc(pendulum.x0, pendulum.y0, 5, 0, Math.PI * 2);
-            ctx.fillStyle = "#555";
-            ctx.fill();
-            
-            // Draw the pendulum bob (scaled by mass)
-            const bobRadius = 10 + pendulum.mass * 5;
-            ctx.beginPath();
-            ctx.arc(pos.x, pos.y, bobRadius, 0, Math.PI * 2);
-            
-            // Create gradient for bob
-            const gradient = ctx.createRadialGradient(
-                pos.x - bobRadius/3, pos.y - bobRadius/3, 0,
-                pos.x, pos.y, bobRadius
-            );
-            gradient.addColorStop(0, "#3498db");
-            gradient.addColorStop(1, "#2980b9");
-            
-            ctx.fillStyle = gradient;
-            ctx.fill();
-            ctx.strokeStyle = "#1a5276";
-            ctx.lineWidth = 1;
-            ctx.stroke();
-        }
+        // Start animation
+        animationId = requestAnimationFrame(animate);
         
-        // Update graph data
-        function updateGraphData(time, angle, velocity, kineticEnergy, potentialEnergy) {
-            graphData.timeData.push(time);
-            graphData.angleData.push(angle);
-            graphData.velocityData.push(velocity);
-            graphData.kineticEnergyData.push(kineticEnergy);
-            graphData.potentialEnergyData.push(potentialEnergy);
-            
-            // Remove old data points beyond the time window
-            while (graphData.timeData[0] < time - timeWindow) {
-                graphData.timeData.shift();
-                graphData.angleData.shift();
-                graphData.velocityData.shift();
-                graphData.kineticEnergyData.shift();
-                graphData.potentialEnergyData.shift();
-            }
-        }
+        // Update button states
+        startBtn.disabled = true;
+        pauseBtn.disabled = false;
         
-        // Draw the graph
-        function drawGraph() {
-            // Clear the canvas
-            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
-            
-            if (graphData.timeData.length === 0) return;
-            
-            const width = graphCanvas.width;
-            const height = graphCanvas.height;
-            const padding = { top: 20, right: 20, bottom: 30, left: 50 };
-            
-            const graphWidth = width - padding.left - padding.right;
-            const graphHeight = height - padding.top - padding.bottom;
-            
-            // Draw grid
-            graphCtx.strokeStyle = "#e0e0e0";
-            graphCtx.lineWidth = 1;
-            
-            // Vertical grid lines (time)
-            const timeStart = Math.max(0, graphData.timeData[graphData.timeData.length - 1] - timeWindow);
-            const timeEnd = Math.max(timeWindow, graphData.timeData[graphData.timeData.length - 1]);
-            const timeStep = timeWindow / 5;
-            
-            for (let t = Math.ceil(timeStart / timeStep) * timeStep; t <= timeEnd; t += timeStep) {
-                const x = padding.left + ((t - timeStart) / timeWindow) * graphWidth;
-                
-                graphCtx.beginPath();
-                graphCtx.moveTo(x, padding.top);
-                graphCtx.lineTo(x, height - padding.bottom);
-                graphCtx.stroke();
-                
-                // Time labels
-                graphCtx.fillStyle = "#666";
-                graphCtx.font = "10px Arial";
-                graphCtx.textAlign = "center";
-                graphCtx.fillText(t.toFixed(1) + "s", x, height - padding.bottom + 15);
-            }
-            
-            // Horizontal grid lines
-            const valueStep = 1;
-            for (let v = -3; v <= 3; v += valueStep) {
-                const y = padding.top + graphHeight / 2 - (v / 3) * (graphHeight / 2);
-                
-                graphCtx.beginPath();
-                graphCtx.moveTo(padding.left, y);
-                graphCtx.lineTo(width - padding.right, y);
-                graphCtx.stroke();
-                
-                // Value labels
-                graphCtx.fillStyle = "#666";
-                graphCtx.font = "10px Arial";
-                graphCtx.textAlign = "right";
-                graphCtx.fillText(v.toFixed(1), padding.left - 5, y + 3);
-            }
-            
-            // Y-axis
-            graphCtx.strokeStyle = "#666";
-            graphCtx.lineWidth = 2;
-            graphCtx.beginPath();
-            graphCtx.moveTo(padding.left, padding.top);
-            graphCtx.lineTo(padding.left, height - padding.bottom);
-            graphCtx.stroke();
-            
-            // X-axis (zero line)
-            graphCtx.beginPath();
-            graphCtx.moveTo(padding.left, padding.top + graphHeight / 2);
-            graphCtx.lineTo(width - padding.right, padding.top + graphHeight / 2);
-            graphCtx.stroke();
-            
-            // Function to map data point to canvas coordinates
-            function mapToCanvas(time, value, yScale = 1) {
-                const x = padding.left + ((time - timeStart) / timeWindow) * graphWidth;
-                // Center y at graphHeight/2, scale by yScale, and invert (canvas y increases downward)
-                const y = padding.top + graphHeight / 2 - (value * yScale) * (graphHeight / 2);
-                return { x, y };
-            }
-            
-            // Draw angle curve
-            graphCtx.strokeStyle = "#e74c3c"; // Red
-            graphCtx.lineWidth = 2;
-            graphCtx.beginPath();
-            
-            for (let i = 0; i < graphData.timeData.length; i++) {
-                const point = mapToCanvas(graphData.timeData[i], graphData.angleData[i]);
-                if (i === 0) {
-                    graphCtx.moveTo(point.x, point.y);
-                } else {
-                    graphCtx.lineTo(point.x, point.y);
-                }
-            }
-            graphCtx.stroke();
-            
-            // Draw velocity curve
-            graphCtx.strokeStyle = "#3498db"; // Blue
-            graphCtx.beginPath();
-            
-            for (let i = 0; i < graphData.timeData.length; i++) {
-                const point = mapToCanvas(graphData.timeData[i], graphData.velocityData[i]);
-                if (i === 0) {
-                    graphCtx.moveTo(point.x, point.y);
-                } else {
-                    graphCtx.lineTo(point.x, point.y);
-                }
-            }
-            graphCtx.stroke();
-            
-            // Draw kinetic energy curve (scaled)
-            graphCtx.strokeStyle = "#2ecc71"; // Green
-            graphCtx.beginPath();
-            
-            for (let i = 0; i < graphData.timeData.length; i++) {
-                // Scale energy values to fit on the same graph
-                const energyScale = 0.5; // Adjust based on typical energy values
-                const point = mapToCanvas(graphData.timeData[i], graphData.kineticEnergyData[i] * energyScale);
-                if (i === 0) {
-                    graphCtx.moveTo(point.x, point.y);
-                } else {
-                    graphCtx.lineTo(point.x, point.y);
-                }
-            }
-            graphCtx.stroke();
-            
-            // Draw potential energy curve (scaled)
-            graphCtx.strokeStyle = "#f39c12"; // Orange
-            graphCtx.beginPath();
-            
-            for (let i = 0; i < graphData.timeData.length; i++) {
-                // Scale energy values to fit on the same graph
-                const energyScale = 0.5; // Adjust based on typical energy values
-                const point = mapToCanvas(graphData.timeData[i], graphData.potentialEnergyData[i] * energyScale);
-                if (i === 0) {
-                    graphCtx.moveTo(point.x, point.y);
-                } else {
-                    graphCtx.lineTo(point.x, point.y);
-                }
-            }
-            graphCtx.stroke();
-            
-            // Graph title
-            graphCtx.fillStyle = "#333";
-            graphCtx.font = "12px Arial";
-            graphCtx.textAlign = "center";
-            graphCtx.fillText("Pendulum Motion Over Time", width / 2, padding.top - 5);
-        }
+        // Disable angle slider during simulation
+        initialAngleSlider.disabled = true;
+    }
+}
+
+function pauseSimulation() {
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
         
-        // Clear graph data
-        function clearGraph() {
-            graphData = {
-                timeData: [],
-                angleData: [],
-                velocityData: [],
-                kineticEnergyData: [],
-                potentialEnergyData: []
-            };
-            drawGraph();
-        }
-        
-        // Animation loop
-        function animate(timestamp) {
-            if (!lastTimestamp) {
-                lastTimestamp = timestamp;
-            }
-            
-            // Calculate time delta (in seconds)
-            const deltaTime = (timestamp - lastTimestamp) / 1000;
-            lastTimestamp = timestamp;
-            
-            // Update elapsed time
-            elapsedTime += deltaTime;
-            
-            // Update physics (limit delta to avoid instability)
-            const maxDelta = 1 / 30; // Maximum 1/30 second step
-            const steps = Math.ceil(deltaTime / maxDelta);
-            
-            for (let i = 0; i < steps; i++) {
-                updatePhysics(deltaTime / steps);
-            }
-            
-            // Update energy display and get energy values
-            const energyValues = updateEnergyDisplay();
-            
-            // Update graph data (10 samples per second is enough)
-            if (graphData.timeData.length === 0 || 
-                elapsedTime - graphData.timeData[graphData.timeData.length - 1] >= 0.1) {
-                updateGraphData(
-                    elapsedTime, 
-                    pendulum.angle, 
-                    pendulum.angularVelocity,
-                    energyValues.kineticEnergy,
-                    energyValues.potentialEnergy
-                );
-                // Initialize
+        // Update button states
+        startBtn.disabled = false;
+        pauseBtn.disabled = true;
+    }
+}
+
+function resetSimulation() {
+    // Stop animation if running
+    if (animationId) {
+        cancelAnimationFrame(animationId);
+        animationId = null;
+    }
+    
+    // Reset pendulum state
+    pendulum.angle = parseFloat(initialAngleSlider.value) * Math.PI / 180;
+    pendulum.angularVelocity = 0;
+    pendulum.angularAcceleration = 0;
+    elapsedTime = 0;
+    lastTimestamp = 0;
+    
+    // Update displays
+    drawPendulum();
+    updateEnergyDisplay();
+    
+    // Update button states
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    
+    // Re-enable angle slider
+    initialAngleSlider.disabled = false;
+}
+
+// Initialize
 function init() {
     // Initialize pendulum display
     drawPendulum();
@@ -751,84 +816,9 @@ function init() {
     dampingValue.textContent = pendulum.damping.toFixed(2);
     initialAngleValue.textContent = (pendulum.angle * 180 / Math.PI).toFixed(0);
 }
-                
-                // Start animation
-                animationId = requestAnimationFrame(animate);
-                
-                // Update button states
-                startBtn.disabled = true;
-                pauseBtn.disabled = false;
-                
-                // Disable angle slider during simulation
-                initialAngleSlider.disabled = true;
-            }
-        }
-        
-        function pauseSimulation() {
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-                animationId = null;
-                
-                // Update button states
-                startBtn.disabled = false;
-                pauseBtn.disabled = true;
-            }
-        }
-        
-        function resetSimulation() {
-            // Stop animation if running
-            if (animationId) {
-                cancelAnimationFrame(animationId);
-                animationId = null;
-            }
-            
-            // Reset pendulum state
-            pendulum.angle = parseFloat(initialAngleSlider.value) * Math.PI / 180;
-            pendulum.angularVelocity = 0;
-            pendulum.angularAcceleration = 0;
-            elapsedTime = 0;
-            
-            // Update displays
-            drawPendulum();
-            updateEnergyDisplay();
-            
-            // Update button states
-            startBtn.disabled = false;
-            pauseBtn.disabled = true;
-            
-            // Re-enable angle slider
-            initialAngleSlider.disabled = false;
-        }
-        
-        // Initialize
-function init() {
-    // Initialize pendulum display
-    drawPendulum();
-    updateEnergyDisplay();
-    updatePeriod();
-    drawGraph();
-  // Initialize
-  function init() {  // <-- This is the duplicate nested function
-      // Initialize pendulum display
-      drawPendulum();
-      updateEnergyDisplay();
-      updatePeriod();
-      drawGraph();
-      
-      // Initial button states
-      startBtn.disabled = false;
-      pauseBtn.disabled = true;
-      
-      // Initialize sliders to match initial pendulum state
-      lengthValue.textContent = pendulum.length.toFixed(1);
-      massValue.textContent = pendulum.mass.toFixed(1);
-      gravityValue.textContent = pendulum.gravity.toFixed(2);
-      dampingValue.textContent = pendulum.damping.toFixed(2);
-      initialAngleValue.textContent = (pendulum.angle * 180 / Math.PI).toFixed(0);
-  }
-        
-        // Call initialization function when page loads
-        window.addEventListener('load', init);
+
+// Call initialization function when page loads
+window.addEventListener('load', init);
     </script>
 </body>
 </html>
