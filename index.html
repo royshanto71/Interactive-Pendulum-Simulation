@@ -140,6 +140,48 @@
             font-size: 1.1em;
             color: #3498db;
         }
+        
+        /* Graph styles */
+        .graph-container {
+            background-color: white;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 20px;
+            margin-top: 20px;
+        }
+        
+        .graph-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+        
+        .graph-controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+        
+        .graph-legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.9em;
+        }
+        
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
@@ -221,12 +263,52 @@
                 </div>
             </div>
         </div>
+        
+        <!-- New Graph Container -->
+        <div class="graph-container">
+            <div class="graph-header">
+                <h2>Real-time Graph</h2>
+                <div class="graph-controls">
+                    <label for="timeWindow">Time Window:</label>
+                    <select id="timeWindow">
+                        <option value="5">5 seconds</option>
+                        <option value="10" selected>10 seconds</option>
+                        <option value="20">20 seconds</option>
+                        <option value="30">30 seconds</option>
+                    </select>
+                    <button id="clearGraphBtn">Clear Graph</button>
+                </div>
+            </div>
+            <canvas id="graphCanvas" width="950" height="300"></canvas>
+            <div class="graph-legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #e74c3c;"></div>
+                    <span>Angle (rad)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #3498db;"></div>
+                    <span>Angular Velocity (rad/s)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #2ecc71;"></div>
+                    <span>Kinetic Energy (J)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background-color: #f39c12;"></div>
+                    <span>Potential Energy (J)</span>
+                </div>
+            </div>
+        </div>
     </div>
     
     <script>
         // Get canvas and its context
         const canvas = document.getElementById('pendulumCanvas');
         const ctx = canvas.getContext('2d');
+        
+        // Get graph canvas and its context
+        const graphCanvas = document.getElementById('graphCanvas');
+        const graphCtx = graphCanvas.getContext('2d');
         
         // Get DOM elements for controls
         const lengthSlider = document.getElementById('length');
@@ -244,6 +326,8 @@
         const startBtn = document.getElementById('startBtn');
         const resetBtn = document.getElementById('resetBtn');
         const pauseBtn = document.getElementById('pauseBtn');
+        const clearGraphBtn = document.getElementById('clearGraphBtn');
+        const timeWindowSelect = document.getElementById('timeWindow');
         
         // Get DOM elements for data display
         const currentAngleDisplay = document.getElementById('currentAngle');
@@ -271,6 +355,18 @@
         
         let animationId = null;
         let lastTimestamp = 0;
+        let elapsedTime = 0;
+        
+        // Graph data
+        let graphData = {
+            timeData: [],
+            angleData: [],
+            velocityData: [],
+            kineticEnergyData: [],
+            potentialEnergyData: []
+        };
+        
+        let timeWindow = parseInt(timeWindowSelect.value); // seconds
         
         // Update UI values when sliders change
         lengthSlider.addEventListener('input', () => {
@@ -313,10 +409,17 @@
             }
         });
         
+        // Time window change handler
+        timeWindowSelect.addEventListener('change', () => {
+            timeWindow = parseInt(timeWindowSelect.value);
+            drawGraph(); // Redraw with new time window
+        });
+        
         // Button event handlers
         startBtn.addEventListener('click', startSimulation);
         resetBtn.addEventListener('click', resetSimulation);
         pauseBtn.addEventListener('click', pauseSimulation);
+        clearGraphBtn.addEventListener('click', clearGraph);
         
         // Calculate pendulum position based on angle and length
         function calculatePosition() {
@@ -366,6 +469,8 @@
             // Update other real-time data
             currentAngleDisplay.textContent = (pendulum.angle * 180 / Math.PI).toFixed(1) + "°";
             angularVelocityDisplay.textContent = pendulum.angularVelocity.toFixed(2) + " rad/s";
+            
+            return { kineticEnergy, potentialEnergy };
         }
         
         // Calculate and display the simple pendulum period
@@ -416,8 +521,181 @@
             ctx.strokeStyle = "#1a5276";
             ctx.lineWidth = 1;
             ctx.stroke();
+        }
+        
+        // Update graph data
+        function updateGraphData(time, angle, velocity, kineticEnergy, potentialEnergy) {
+            graphData.timeData.push(time);
+            graphData.angleData.push(angle);
+            graphData.velocityData.push(velocity);
+            graphData.kineticEnergyData.push(kineticEnergy);
+            graphData.potentialEnergyData.push(potentialEnergy);
             
-            // Draw the trace path (to be implemented later)
+            // Remove old data points beyond the time window
+            while (graphData.timeData[0] < time - timeWindow) {
+                graphData.timeData.shift();
+                graphData.angleData.shift();
+                graphData.velocityData.shift();
+                graphData.kineticEnergyData.shift();
+                graphData.potentialEnergyData.shift();
+            }
+        }
+        
+        // Draw the graph
+        function drawGraph() {
+            // Clear the canvas
+            graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+            
+            if (graphData.timeData.length === 0) return;
+            
+            const width = graphCanvas.width;
+            const height = graphCanvas.height;
+            const padding = { top: 20, right: 20, bottom: 30, left: 50 };
+            
+            const graphWidth = width - padding.left - padding.right;
+            const graphHeight = height - padding.top - padding.bottom;
+            
+            // Draw grid
+            graphCtx.strokeStyle = "#e0e0e0";
+            graphCtx.lineWidth = 1;
+            
+            // Vertical grid lines (time)
+            const timeStart = Math.max(0, graphData.timeData[graphData.timeData.length - 1] - timeWindow);
+            const timeEnd = Math.max(timeWindow, graphData.timeData[graphData.timeData.length - 1]);
+            const timeStep = timeWindow / 5;
+            
+            for (let t = Math.ceil(timeStart / timeStep) * timeStep; t <= timeEnd; t += timeStep) {
+                const x = padding.left + ((t - timeStart) / timeWindow) * graphWidth;
+                
+                graphCtx.beginPath();
+                graphCtx.moveTo(x, padding.top);
+                graphCtx.lineTo(x, height - padding.bottom);
+                graphCtx.stroke();
+                
+                // Time labels
+                graphCtx.fillStyle = "#666";
+                graphCtx.font = "10px Arial";
+                graphCtx.textAlign = "center";
+                graphCtx.fillText(t.toFixed(1) + "s", x, height - padding.bottom + 15);
+            }
+            
+            // Horizontal grid lines
+            const valueStep = 1;
+            for (let v = -3; v <= 3; v += valueStep) {
+                const y = padding.top + graphHeight / 2 - (v / 3) * (graphHeight / 2);
+                
+                graphCtx.beginPath();
+                graphCtx.moveTo(padding.left, y);
+                graphCtx.lineTo(width - padding.right, y);
+                graphCtx.stroke();
+                
+                // Value labels
+                graphCtx.fillStyle = "#666";
+                graphCtx.font = "10px Arial";
+                graphCtx.textAlign = "right";
+                graphCtx.fillText(v.toFixed(1), padding.left - 5, y + 3);
+            }
+            
+            // Y-axis
+            graphCtx.strokeStyle = "#666";
+            graphCtx.lineWidth = 2;
+            graphCtx.beginPath();
+            graphCtx.moveTo(padding.left, padding.top);
+            graphCtx.lineTo(padding.left, height - padding.bottom);
+            graphCtx.stroke();
+            
+            // X-axis (zero line)
+            graphCtx.beginPath();
+            graphCtx.moveTo(padding.left, padding.top + graphHeight / 2);
+            graphCtx.lineTo(width - padding.right, padding.top + graphHeight / 2);
+            graphCtx.stroke();
+            
+            // Function to map data point to canvas coordinates
+            function mapToCanvas(time, value, yScale = 1) {
+                const x = padding.left + ((time - timeStart) / timeWindow) * graphWidth;
+                // Center y at graphHeight/2, scale by yScale, and invert (canvas y increases downward)
+                const y = padding.top + graphHeight / 2 - (value * yScale) * (graphHeight / 2);
+                return { x, y };
+            }
+            
+            // Draw angle curve
+            graphCtx.strokeStyle = "#e74c3c"; // Red
+            graphCtx.lineWidth = 2;
+            graphCtx.beginPath();
+            
+            for (let i = 0; i < graphData.timeData.length; i++) {
+                const point = mapToCanvas(graphData.timeData[i], graphData.angleData[i]);
+                if (i === 0) {
+                    graphCtx.moveTo(point.x, point.y);
+                } else {
+                    graphCtx.lineTo(point.x, point.y);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Draw velocity curve
+            graphCtx.strokeStyle = "#3498db"; // Blue
+            graphCtx.beginPath();
+            
+            for (let i = 0; i < graphData.timeData.length; i++) {
+                const point = mapToCanvas(graphData.timeData[i], graphData.velocityData[i]);
+                if (i === 0) {
+                    graphCtx.moveTo(point.x, point.y);
+                } else {
+                    graphCtx.lineTo(point.x, point.y);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Draw kinetic energy curve (scaled)
+            graphCtx.strokeStyle = "#2ecc71"; // Green
+            graphCtx.beginPath();
+            
+            for (let i = 0; i < graphData.timeData.length; i++) {
+                // Scale energy values to fit on the same graph
+                const energyScale = 0.5; // Adjust based on typical energy values
+                const point = mapToCanvas(graphData.timeData[i], graphData.kineticEnergyData[i] * energyScale);
+                if (i === 0) {
+                    graphCtx.moveTo(point.x, point.y);
+                } else {
+                    graphCtx.lineTo(point.x, point.y);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Draw potential energy curve (scaled)
+            graphCtx.strokeStyle = "#f39c12"; // Orange
+            graphCtx.beginPath();
+            
+            for (let i = 0; i < graphData.timeData.length; i++) {
+                // Scale energy values to fit on the same graph
+                const energyScale = 0.5; // Adjust based on typical energy values
+                const point = mapToCanvas(graphData.timeData[i], graphData.potentialEnergyData[i] * energyScale);
+                if (i === 0) {
+                    graphCtx.moveTo(point.x, point.y);
+                } else {
+                    graphCtx.lineTo(point.x, point.y);
+                }
+            }
+            graphCtx.stroke();
+            
+            // Graph title
+            graphCtx.fillStyle = "#333";
+            graphCtx.font = "12px Arial";
+            graphCtx.textAlign = "center";
+            graphCtx.fillText("Pendulum Motion Over Time", width / 2, padding.top - 5);
+        }
+        
+        // Clear graph data
+        function clearGraph() {
+            graphData = {
+                timeData: [],
+                angleData: [],
+                velocityData: [],
+                kineticEnergyData: [],
+                potentialEnergyData: []
+            };
+            drawGraph();
         }
         
         // Animation loop
@@ -430,6 +708,9 @@
             const deltaTime = (timestamp - lastTimestamp) / 1000;
             lastTimestamp = timestamp;
             
+            // Update elapsed time
+            elapsedTime += deltaTime;
+            
             // Update physics (limit delta to avoid instability)
             const maxDelta = 1 / 30; // Maximum 1/30 second step
             const steps = Math.ceil(deltaTime / maxDelta);
@@ -438,8 +719,21 @@
                 updatePhysics(deltaTime / steps);
             }
             
-            // Update energy display
-            updateEnergyDisplay();
+            // Update energy display and get energy values
+            const energyValues = updateEnergyDisplay();
+            
+            // Update graph data (10 samples per second is enough)
+            if (graphData.timeData.length === 0 || 
+                elapsedTime - graphData.timeData[graphData.timeData.length - 1] >= 0.1) {
+                updateGraphData(
+                    elapsedTime, 
+                    pendulum.angle, 
+                    pendulum.angularVelocity,
+                    energyValues.kineticEnergy,
+                    energyValues.potentialEnergy
+                );
+                drawGraph();
+            }
             
             // Draw pendulum
             drawPendulum();
@@ -487,6 +781,7 @@
             pendulum.angle = parseFloat(initialAngleSlider.value) * Math.PI / 180;
             pendulum.angularVelocity = 0;
             pendulum.angularAcceleration = 0;
+            elapsedTime = 0;
             
             // Update displays
             drawPendulum();
@@ -506,18 +801,29 @@
             drawPendulum();
             updateEnergyDisplay();
             updatePeriod();
+            drawGraph();
+          // Initialize
+        function init() {
+            // Initialize pendulum display
+            drawPendulum();
+            updateEnergyDisplay();
+            updatePeriod();
+            drawGraph();
             
-            // Add resize event handler
-            window.addEventListener('resize', () => {
-                // Redraw pendulum if not animating
-                if (!animationId) {
-                    drawPendulum();
-                }
-            });
+            // Initial button states
+            startBtn.disabled = false;
+            pauseBtn.disabled = true;
+            
+            // Initialize sliders to match initial pendulum state
+            lengthValue.textContent = pendulum.length.toFixed(1);
+            massValue.textContent = pendulum.mass.toFixed(1);
+            gravityValue.textContent = pendulum.gravity.toFixed(2);
+            dampingValue.textContent = pendulum.damping.toFixed(2);
+            initialAngleValue.textContent = (pendulum.angle * 180 / Math.PI).toFixed(0);
         }
         
-        // Start initialization when page loads
-        init();
+        // Call initialization function when page loads
+        window.addEventListener('load', init);
     </script>
 </body>
 </html>
