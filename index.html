@@ -796,31 +796,31 @@
         }
         
         // Initialize
-        function init() {
-            // Initialize pendulum display
-            drawPendulum();
-            updateEnergyDisplay();
-            updatePeriod();
-            drawGraph();
-          // Initialize
-        function init() {
-            // Initialize pendulum display
-            drawPendulum();
-            updateEnergyDisplay();
-            updatePeriod();
-            drawGraph();
-            
-            // Initial button states
-            startBtn.disabled = false;
-            pauseBtn.disabled = true;
-            
-            // Initialize sliders to match initial pendulum state
-            lengthValue.textContent = pendulum.length.toFixed(1);
-            massValue.textContent = pendulum.mass.toFixed(1);
-            gravityValue.textContent = pendulum.gravity.toFixed(2);
-            dampingValue.textContent = pendulum.damping.toFixed(2);
-            initialAngleValue.textContent = (pendulum.angle * 180 / Math.PI).toFixed(0);
-        }
+function init() {
+    // Initialize pendulum display
+    drawPendulum();
+    updateEnergyDisplay();
+    updatePeriod();
+    drawGraph();
+  // Initialize
+  function init() {  // <-- This is the duplicate nested function
+      // Initialize pendulum display
+      drawPendulum();
+      updateEnergyDisplay();
+      updatePeriod();
+      drawGraph();
+      
+      // Initial button states
+      startBtn.disabled = false;
+      pauseBtn.disabled = true;
+      
+      // Initialize sliders to match initial pendulum state
+      lengthValue.textContent = pendulum.length.toFixed(1);
+      massValue.textContent = pendulum.mass.toFixed(1);
+      gravityValue.textContent = pendulum.gravity.toFixed(2);
+      dampingValue.textContent = pendulum.damping.toFixed(2);
+      initialAngleValue.textContent = (pendulum.angle * 180 / Math.PI).toFixed(0);
+  }
         
         // Call initialization function when page loads
         window.addEventListener('load', init);
