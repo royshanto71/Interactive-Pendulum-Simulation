@@ -732,20 +732,25 @@
                     energyValues.kineticEnergy,
                     energyValues.potentialEnergy
                 );
-                drawGraph();
-            }
-            
-            // Draw pendulum
-            drawPendulum();
-            
-            // Request next frame
-            animationId = requestAnimationFrame(animate);
-        }
-        
-        function startSimulation() {
-            if (!animationId) {
-                // Reset timestamp to avoid large jumps
-                lastTimestamp = 0;
+                // Initialize
+function init() {
+    // Initialize pendulum display
+    drawPendulum();
+    updateEnergyDisplay();
+    updatePeriod();
+    drawGraph();
+    
+    // Initial button states
+    startBtn.disabled = false;
+    pauseBtn.disabled = true;
+    
+    // Initialize sliders to match initial pendulum state
+    lengthValue.textContent = pendulum.length.toFixed(1);
+    massValue.textContent = pendulum.mass.toFixed(1);
+    gravityValue.textContent = pendulum.gravity.toFixed(2);
+    dampingValue.textContent = pendulum.damping.toFixed(2);
+    initialAngleValue.textContent = (pendulum.angle * 180 / Math.PI).toFixed(0);
+}
                 
                 // Start animation
                 animationId = requestAnimationFrame(animate);
